@@ -154,9 +154,11 @@ namespace Veldrid.Sdl2
                 switch (value)
                 {
                     case WindowState.Normal:
+                        SDL_ShowWindow(_window);
                         SDL_SetWindowFullscreen(_window, SDL_FullscreenMode.Windowed);
                         break;
                     case WindowState.FullScreen:
+                        SDL_ShowWindow(_window);
                         SDL_SetWindowFullscreen(_window, SDL_FullscreenMode.Fullscreen);
                         break;
                     case WindowState.Maximized:
@@ -166,6 +168,7 @@ namespace Veldrid.Sdl2
                         SDL_MinimizeWindow(_window);
                         break;
                     case WindowState.BorderlessFullScreen:
+                        SDL_ShowWindow(_window);
                         SDL_SetWindowFullscreen(_window, SDL_FullscreenMode.FullScreenDesktop);
                         break;
                     case WindowState.Hidden:
