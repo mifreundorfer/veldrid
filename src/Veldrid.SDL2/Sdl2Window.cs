@@ -265,6 +265,7 @@ namespace Veldrid.Sdl2
         public event Action<MouseEvent> MouseUp;
         public event Action<KeyEvent> KeyDown;
         public event Action<KeyEvent> KeyUp;
+        public event Action<string> TextInput;
         public event Action<DragDropEvent> DragDrop;
 
         public Point ClientToScreen(Point p)
@@ -495,6 +496,8 @@ namespace Veldrid.Sdl2
                 {
                     _privateSnapshot.KeyCharPressesList.Add(charsPtr[i]);
                 }
+
+                TextInput?.Invoke(new string(charsPtr, 0, charCount));
             }
         }
 
