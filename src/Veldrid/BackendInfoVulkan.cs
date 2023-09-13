@@ -17,6 +17,8 @@ namespace Veldrid
         private readonly Lazy<ReadOnlyCollection<string>> _instanceLayers;
         private readonly ReadOnlyCollection<string> _instanceExtensions;
         private readonly Lazy<ReadOnlyCollection<ExtensionProperties>> _deviceExtensions;
+        private readonly Lazy<ReadOnlyCollection<string>> _enabledInstanceExtensions;
+        private readonly Lazy<ReadOnlyCollection<string>> _enabledDeviceExtensions;
 
         internal BackendInfoVulkan(VkGraphicsDevice gd)
         {
@@ -24,7 +26,14 @@ namespace Veldrid
             _instanceLayers = new Lazy<ReadOnlyCollection<string>>(() => new ReadOnlyCollection<string>(VulkanUtil.EnumerateInstanceLayers()));
             _instanceExtensions = new ReadOnlyCollection<string>(VulkanUtil.GetInstanceExtensions());
             _deviceExtensions = new Lazy<ReadOnlyCollection<ExtensionProperties>>(EnumerateDeviceExtensions);
+            _enabledInstanceExtensions = new Lazy<ReadOnlyCollection<string>>(() => new ReadOnlyCollection<string>(_gd.EnabledInstanceExtensions));
+            _enabledDeviceExtensions = new Lazy<ReadOnlyCollection<string>>(() => new ReadOnlyCollection<string>(_gd.EnabledDeviceExtensions));
         }
+
+        /// <summary>
+        /// Gets api version that the VkInstance was created with.
+        /// </summary>
+        public VkVersion ApiVersion => _gd.InstanceApiVersion;
 
         /// <summary>
         /// Gets the underlying VkInstance used by the GraphicsDevice.
@@ -61,11 +70,20 @@ namespace Veldrid
         /// </summary>
         public string DriverInfo => _gd.DriverInfo;
 
+        public VkPhysicalDeviceFeatures PhyiscalDeviceFeatures => _gd.PhysicalDeviceFeatures;
+
         public ReadOnlyCollection<string> AvailableInstanceLayers => _instanceLayers.Value;
 
         public ReadOnlyCollection<string> AvailableInstanceExtensions => _instanceExtensions;
 
+        public ReadOnlyCollection<string> EnabledInstanceExtensions => _enabledInstanceExtensions.Value;
+
         public ReadOnlyCollection<ExtensionProperties> AvailableDeviceExtensions => _deviceExtensions.Value;
+
+        public ReadOnlyCollection<string> EnabledDeviceExtensions => _enabledDeviceExtensions.Value;
+
+        public IntPtr GetInstanceProcAddr(string name) => _gd.GetInstanceProcAddr(name);
+        public IntPtr GetDeviceProcAddr(string name) => _gd.GetDeviceProcAddr(name);
 
         /// <summary>
         /// Overrides the current VkImageLayout tracked by the given Texture. This should be used when a VkImage is created by
@@ -102,6 +120,38 @@ namespace Veldrid
             }
 
             return vkTexture.OptimalDeviceImage.Handle;
+        }
+
+        public TextureInfo GetTextureInfo(Texture texture)
+        {
+            VkTexture vkTexture = Util.AssertSubtype<Texture, VkTexture>(texture);
+            if ((vkTexture.Usage & TextureUsage.Staging) != 0)
+            {
+                throw new VeldridException(
+                    $"{nameof(GetVkImage)} cannot be used if the {nameof(Texture)} " +
+                    $"has {nameof(TextureUsage)}.{nameof(TextureUsage.Staging)}.");
+            }
+
+            bool isStaging = (vkTexture.Usage & TextureUsage.Staging) == TextureUsage.Staging;
+
+            TextureInfo result;
+            result.ImageFormat = (uint)vkTexture.VkFormat;
+            result.ImageUsageFlags = (uint)vkTexture.VkImageUsage;
+            result.SharingMode = (uint)VkSharingMode.Exclusive;
+            result.ImageTiling = (uint)VkImageTiling.Optimal;
+            result.SampleCount = vkTexture.SampleCount switch
+            {
+                TextureSampleCount.Count1 => 1,
+                TextureSampleCount.Count2 => 2,
+                TextureSampleCount.Count4 => 4,
+                TextureSampleCount.Count8 => 8,
+                TextureSampleCount.Count16 => 16,
+                TextureSampleCount.Count32 => 32,
+                _ => throw Illegal.Value<TextureSampleCount>(),
+            };
+
+            result.ImageLayout = (uint)vkTexture.GetImageLayout(0, 0);
+            return result;
         }
 
         /// <summary>
@@ -143,6 +193,17 @@ namespace Veldrid
             {
                 return Name;
             }
+        }
+
+        public struct TextureInfo
+        {
+            public uint ImageFormat;
+            public uint ImageUsageFlags;
+            public uint SharingMode;
+            public uint ImageTiling;
+            public uint SampleCount;
+            public uint ImageLayout;
+
         }
     }
 }

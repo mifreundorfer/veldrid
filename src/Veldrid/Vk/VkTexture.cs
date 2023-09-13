@@ -48,6 +48,7 @@ namespace Veldrid.Vk
 
         public VkFormat VkFormat { get; }
         public VkSampleCountFlags VkSampleCount { get; }
+        public VkImageUsageFlags VkImageUsage => VkFormats.VdToVkTextureUsage(Usage);
 
         private VkImageLayout[] _imageLayouts;
         private bool _isSwapchainTexture;

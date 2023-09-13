@@ -15,6 +15,7 @@ namespace Veldrid.Vk
     {
         private static readonly FixedUtf8String s_name = "Veldrid-VkGraphicsDevice";
         private static readonly Lazy<bool> s_isSupported = new Lazy<bool>(CheckIsSupported, isThreadSafe: true);
+        private static readonly VkVersion s_instanceApiVersion = new VkVersion(1, 0, 0);
 
         private VkInstance _instance;
         private VkPhysicalDevice _physicalDevice;
@@ -54,6 +55,9 @@ namespace Veldrid.Vk
         private vkGetImageMemoryRequirements2_t _getImageMemoryRequirements2;
         private vkGetPhysicalDeviceProperties2_t _getPhysicalDeviceProperties2;
         private vkCreateMetalSurfaceEXT_t _createMetalSurfaceEXT;
+
+        private readonly List<string> _enabledInstanceExtensions = new List<string>();
+        private readonly List<string> _enabledDeviceExtensions = new List<string>();
 
         // Staging Resources
         private const uint MinStagingBufferSize = 64;
@@ -111,6 +115,10 @@ namespace Veldrid.Vk
         public vkGetBufferMemoryRequirements2_t GetBufferMemoryRequirements2 => _getBufferMemoryRequirements2;
         public vkGetImageMemoryRequirements2_t GetImageMemoryRequirements2 => _getImageMemoryRequirements2;
         public vkCreateMetalSurfaceEXT_t CreateMetalSurfaceEXT => _createMetalSurfaceEXT;
+        public VkPhysicalDeviceFeatures PhysicalDeviceFeatures => _physicalDeviceFeatures;
+        public VkVersion InstanceApiVersion => s_instanceApiVersion;
+        public IList<string> EnabledInstanceExtensions => _enabledInstanceExtensions;
+        public IList<string> EnabledDeviceExtensions => _enabledDeviceExtensions;
 
         private readonly object _submittedFencesLock = new object();
         private readonly ConcurrentQueue<Vulkan.VkFence> _availableSubmissionFences = new ConcurrentQueue<Vulkan.VkFence>();
@@ -457,7 +465,7 @@ namespace Veldrid.Vk
 
             VkInstanceCreateInfo instanceCI = VkInstanceCreateInfo.New();
             VkApplicationInfo applicationInfo = new VkApplicationInfo();
-            applicationInfo.apiVersion = new VkVersion(1, 0, 0);
+            applicationInfo.apiVersion = s_instanceApiVersion;
             applicationInfo.applicationVersion = new VkVersion(1, 0, 0);
             applicationInfo.engineVersion = new VkVersion(1, 0, 0);
             applicationInfo.pApplicationName = s_name;
@@ -526,12 +534,14 @@ namespace Veldrid.Vk
             foreach (var ext in _surfaceExtensions)
             {
                 instanceExtensions.Add(ext);
+                _enabledInstanceExtensions.Add(ext);
             }
 
             bool hasDeviceProperties2 = availableInstanceExtensions.Contains(CommonStrings.VK_KHR_get_physical_device_properties2);
             if (hasDeviceProperties2)
             {
                 instanceExtensions.Add(CommonStrings.VK_KHR_get_physical_device_properties2);
+                _enabledInstanceExtensions.Add(CommonStrings.VK_KHR_get_physical_device_properties2);
             }
 
             string[] requestedInstanceExtensions = options.InstanceExtensions ?? Array.Empty<string>();
@@ -545,6 +555,7 @@ namespace Veldrid.Vk
 
                 FixedUtf8String utf8Str = new FixedUtf8String(requiredExt);
                 instanceExtensions.Add(utf8Str);
+                _enabledInstanceExtensions.Add(utf8Str);
                 tempStrings.Add(utf8Str);
             }
 
@@ -555,6 +566,7 @@ namespace Veldrid.Vk
                 {
                     debugReportExtensionAvailable = true;
                     instanceExtensions.Add(CommonStrings.VK_EXT_DEBUG_REPORT_EXTENSION_NAME);
+                    _enabledInstanceExtensions.Add(CommonStrings.VK_EXT_DEBUG_REPORT_EXTENSION_NAME);
                 }
                 if (availableInstanceLayers.Contains(CommonStrings.StandardValidationLayerName))
                 {
@@ -744,46 +756,54 @@ namespace Veldrid.Vk
                     if (extensionName == "VK_EXT_debug_marker")
                     {
                         activeExtensions[activeExtensionCount++] = CommonStrings.VK_EXT_DEBUG_MARKER_EXTENSION_NAME;
+                        _enabledDeviceExtensions.Add(CommonStrings.VK_EXT_DEBUG_MARKER_EXTENSION_NAME);
                         requiredInstanceExtensions.Remove(extensionName);
                         _debugMarkerEnabled = true;
                     }
                     else if (extensionName == "VK_KHR_swapchain")
                     {
                         activeExtensions[activeExtensionCount++] = (IntPtr)properties[property].extensionName;
+                        _enabledDeviceExtensions.Add(extensionName);
                         requiredInstanceExtensions.Remove(extensionName);
                     }
                     else if (preferStandardClipY && extensionName == "VK_KHR_maintenance1")
                     {
                         activeExtensions[activeExtensionCount++] = (IntPtr)properties[property].extensionName;
+                        _enabledDeviceExtensions.Add(extensionName);
                         requiredInstanceExtensions.Remove(extensionName);
                         _standardClipYDirection = true;
                     }
                     else if (extensionName == "VK_KHR_get_memory_requirements2")
                     {
                         activeExtensions[activeExtensionCount++] = (IntPtr)properties[property].extensionName;
+                        _enabledDeviceExtensions.Add(extensionName);
                         requiredInstanceExtensions.Remove(extensionName);
                         hasMemReqs2 = true;
                     }
                     else if (extensionName == "VK_KHR_dedicated_allocation")
                     {
                         activeExtensions[activeExtensionCount++] = (IntPtr)properties[property].extensionName;
+                        _enabledDeviceExtensions.Add(extensionName);
                         requiredInstanceExtensions.Remove(extensionName);
                         hasDedicatedAllocation = true;
                     }
                     else if (extensionName == "VK_KHR_driver_properties")
                     {
                         activeExtensions[activeExtensionCount++] = (IntPtr)properties[property].extensionName;
+                        _enabledDeviceExtensions.Add(extensionName);
                         requiredInstanceExtensions.Remove(extensionName);
                         hasDriverProperties = true;
                     }
                     else if (extensionName == CommonStrings.VK_KHR_portability_subset)
                     {
                         activeExtensions[activeExtensionCount++] = (IntPtr)properties[property].extensionName;
+                        _enabledDeviceExtensions.Add(extensionName);
                         requiredInstanceExtensions.Remove(extensionName);
                     }
                     else if (requiredInstanceExtensions.Remove(extensionName))
                     {
                         activeExtensions[activeExtensionCount++] = (IntPtr)properties[property].extensionName;
+                        _enabledDeviceExtensions.Add(extensionName);
                     }
                 }
             }
@@ -863,7 +883,7 @@ namespace Veldrid.Vk
             }
         }
 
-        private IntPtr GetInstanceProcAddr(string name)
+        public IntPtr GetInstanceProcAddr(string name)
         {
             int byteCount = Encoding.UTF8.GetByteCount(name);
             byte* utf8Ptr = stackalloc byte[byteCount + 1];
@@ -887,7 +907,7 @@ namespace Veldrid.Vk
             return default;
         }
 
-        private IntPtr GetDeviceProcAddr(string name)
+        public IntPtr GetDeviceProcAddr(string name)
         {
             int byteCount = Encoding.UTF8.GetByteCount(name);
             byte* utf8Ptr = stackalloc byte[byteCount + 1];
@@ -1400,7 +1420,7 @@ namespace Veldrid.Vk
 
             VkInstanceCreateInfo instanceCI = VkInstanceCreateInfo.New();
             VkApplicationInfo applicationInfo = new VkApplicationInfo();
-            applicationInfo.apiVersion = new VkVersion(1, 0, 0);
+            applicationInfo.apiVersion = s_instanceApiVersion;
             applicationInfo.applicationVersion = new VkVersion(1, 0, 0);
             applicationInfo.engineVersion = new VkVersion(1, 0, 0);
             applicationInfo.pApplicationName = s_name;

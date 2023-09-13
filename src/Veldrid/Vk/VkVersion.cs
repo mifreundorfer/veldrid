@@ -1,6 +1,6 @@
 ﻿namespace Veldrid.Vk
 {
-    internal struct VkVersion
+    public struct VkVersion
     {
         private readonly uint value;
 
