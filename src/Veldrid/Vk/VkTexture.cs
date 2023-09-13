@@ -233,6 +233,11 @@ namespace Veldrid.Vk
             VkFormat = vkFormat;
             _format = VkFormats.VkToVdPixelFormat(VkFormat);
             ArrayLayers = arrayLayers;
+            bool isCubemap = (usage & TextureUsage.Cubemap) == TextureUsage.Cubemap;
+            _actualImageArrayLayers = isCubemap
+                ? 6 * ArrayLayers
+                : ArrayLayers;
+
             Usage = usage;
             Type = TextureType.Texture2D;
             SampleCount = sampleCount;
